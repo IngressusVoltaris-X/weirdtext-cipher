@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeirdText Cipher - 39 Symbols, Full Punctuation</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 1000px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        h1 {
+            color: #00ff9d;
+            text-align: center;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 20px;
+        }
+        .symbol-display {
+            background: #0a0a0f;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            white-space: nowrap;
+            font-size: 20px;
+            letter-spacing: 4px;
+            color: #ffcc00;
+            font-family: monospace;
+        }
+        textarea {
+            width: 100%;
+            padding: 15px;
+            background: #0a0a0f;
+            border: 1px solid #333;
+            border-radius: 12px;
+            color: #00ff9d;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #00ff9d;
+        }
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #00ff9d, #00cc7a);
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 14px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button.secondary {
+            background: linear-gradient(135deg, #ff6b6b, #cc5555);
+        }
+        button.tertiary {
+            background: linear-gradient(135deg, #6b48ff, #4a30cc);
+        }
+        button.copy-btn {
+            background: linear-gradient(135deg, #ffcc00, #ff9900);
+            color: #0a0a0a;
+        }
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .status.success {
+            background: rgba(0,255,157,0.1);
+            color: #00ff9d;
+        }
+        .status.error {
+            background: rgba(255,107,107,0.1);
+            color: #ff6b6b;
+        }
+        .legend {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            font-size: 12px;
+            color: #888;
+            line-height: 1.5;
+            text-align: center;
+        }
+        hr {
+            border-color: #333;
+            margin: 20px 0;
+        }
+        #loading {
+            text-align: center;
+            color: #ffcc00;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔮 WEIRDTEXT CIPHER 🔮</h1>
+    <div class="subtitle">encode & decode messages using 39 unusual symbols</div>
+
+    <div id="loading">⏳ Loading cipher engine...</div>
+
+    <div class="symbol-label">📜 SYMBOL SET</div>
+    <div class="symbol-display" id="symbolDisplay"></div>
+
+    <textarea id="inputText" rows="4" placeholder="Enter text to encode or decode..."></textarea>
+
+    <div class="button-group">
+        <button id="encodeBtn" disabled>✨ ENCODE</button>
+        <button id="decodeBtn" disabled class="secondary">🔓 DECODE</button>
+        <button id="clearBtn" class="tertiary">🗑️ CLEAR</button>
+    </div>
+
+    <div class="symbol-label">🔐 RESULT</div>
+    <textarea id="outputText" rows="6" readonly placeholder="Result will appear here..."></textarea>
+    
+    <div class="button-group">
+        <button id="copyBtn" class="copy-btn" disabled>📋 COPY TO CLIPBOARD</button>
+    </div>
+    
+    <div id="status" class="status"></div>
+    <hr>
+    <div class="legend">
+        An unusual encoding method that transforms text into a sequence of 39 rare symbols.<br>
+        Each encoded character depends on the previous state, making patterns difficult to detect.<br>
+        Supports letters, numbers, punctuation, and spaces.
+    </div>
+</div>
+
+<script>
+    // 39 symbols – first 37 are regular data symbols, last two are mode toggles
+    const SYMBOLS = [
+        '§', '÷', '¦', 'æ', '¶', 'ö', 'Æ', 'δ', '╪', '',
+        '℟', '℔', 'ꜷ', 'â', 'ç', 'ʤ', 'Ω', 'φ', '𓂄', '∞',
+        '∆', '∑', 'π', 'µ', 'ß', 'ж', '‡', '𓃇', '¬',
+        '▀', '▄', '█', 'ﷰ',
+        '☭', '♕', '♖', '𓅓', 'ɟ', '℘'
+    ];
+    document.getElementById('symbolDisplay').innerHTML = SYMBOLS.map(s => `<span style="margin:0 4px">${s}</span>`).join('');
+
+    let pyodideReady = false;
+    let encodeFunc, decodeFunc;
+
+    async function loadPyodideAndCode() {
+        const loadingDiv = document.getElementById('loading');
+        try {
+            let pyodide = await loadPyodide();
+            loadingDiv.innerText = '📦 Initializing...';
+
+            const pythonCode = `
+# ========== FIXED: exactly 37 shifted characters (removed '^') ==========
+SYMBOLS = [
+    '§', '÷', '¦', 'æ', '¶', 'ö', 'Æ', 'δ', '╪', '',
+    '℟', '℔', 'ꜷ', 'â', 'ç', 'ʤ', 'Ω', 'φ', '𓂄', '∞',
+    '∆', '∑', 'π', 'µ', 'ß', 'ж', '‡', '𓃇', '¬',
+    '▀', '▄', '█', 'ﷰ',
+    '☭', '♕', '♖', '𓅓', 'ɟ', '℘'
+]
+
+REGULAR_SYMBOLS = SYMBOLS[:-2]   # indices 0-36
+SHIFT_SYM = SYMBOLS[-2]          # 'ɟ'
+CAPS_SYM  = SYMBOLS[-1]          # '℘'
+
+SHIFT_IDX = 37   # numeric code for shift toggle
+CAPS_IDX  = 38   # numeric code for caps toggle
+
+# Normal characters: a-z, space, period, comma, newline (30 items)
+NORMAL_TARGETS = list('abcdefghijklmnopqrstuvwxyz') + [' ', '.', ',', '\\n']
+
+# Shifted characters: 37 items (removed '^' to avoid index collision)
+SHIFTED_TARGETS = [
+    '0','1','2','3','4','5','6','7','8','9',
+    '!','?','%','@','#','$','&','*','(',')',
+    '-','_','+','=',      # removed '^' here
+    ':', '[', ']', "'",
+    '"', '{', '}', '|', '\\\\', '/', ';', '<', '>'
+]
+
+UNSUPPORTED_TARGET = 30   # within 0-36, used for unsupported chars
+
+normal_to_idx = {ch: i for i, ch in enumerate(NORMAL_TARGETS)}
+idx_to_normal = {i: ch for i, ch in enumerate(NORMAL_TARGETS)}
+shifted_to_idx = {ch: i for i, ch in enumerate(SHIFTED_TARGETS)}
+idx_to_shifted = {i: ch for i, ch in enumerate(SHIFTED_TARGETS)}
+
+INITIAL_STATE = 123456789
+MASK = (1 << 64) - 1
+MULT = 1103515245
+INC = 12345
+
+def next_state(state, target):
+    return (state * MULT + target + INC) & MASK
+
+def encode(plaintext):
+    if not plaintext:
+        return ''
+    result = []
+    state = INITIAL_STATE
+    shift_mode = False
+    
+    for ch in plaintext:
+        is_upper = ch.isupper() and ch.isalpha()
+        lower_ch = ch.lower()
+        
+        if lower_ch in normal_to_idx:
+            target = normal_to_idx[lower_ch]
+            use_shift = False
+        elif ch in shifted_to_idx:
+            target = shifted_to_idx[ch]
+            use_shift = True
+        else:
+            target = UNSUPPORTED_TARGET
+            use_shift = False
+            is_upper = False
+        
+        # Caps lock toggle
+        if is_upper:
+            result.append(CAPS_SYM)
+            state = next_state(state, CAPS_IDX)
+        
+        # Shift mode toggle (only if needed and not already in shift mode)
+        if use_shift and not shift_mode:
+            result.append(SHIFT_SYM)
+            state = next_state(state, SHIFT_IDX)
+            shift_mode = True
+        
+        # Encode regular character (target is 0..36)
+        out_idx = (state + target) % len(REGULAR_SYMBOLS)
+        result.append(REGULAR_SYMBOLS[out_idx])
+        state = next_state(state, target)
+        shift_mode = False   # shift mode resets after each character
+    
+    return ''.join(result)
+
+def decode(weird_text):
+    if not weird_text:
+        return ''
+    result = []
+    state = INITIAL_STATE
+    shift_mode = False
+    caps_next = False
+    
+    sym_to_idx = {sym: i for i, sym in enumerate(SYMBOLS)}
+    reg_to_idx = {sym: i for i, sym in enumerate(REGULAR_SYMBOLS)}
+    
+    for sym in weird_text:
+        if sym not in sym_to_idx:
+            result.append('█')
+            continue
+        
+        if sym == CAPS_SYM:
+            caps_next = True
+            state = next_state(state, CAPS_IDX)
+            continue
+        if sym == SHIFT_SYM:
+            state = next_state(state, SHIFT_IDX)
+            shift_mode = True
+            continue
+        
+        if sym not in reg_to_idx:
+            result.append('█')
+            continue
+        
+        reg_idx = reg_to_idx[sym]
+        target = (reg_idx - state) % len(REGULAR_SYMBOLS)
+        
+        if shift_mode:
+            if target < len(SHIFTED_TARGETS):
+                ch = idx_to_shifted[target]
+            else:
+                ch = '█'
+            shift_mode = False
+        else:
+            if target < len(NORMAL_TARGETS):
+                ch = idx_to_normal[target]
+            else:
+                ch = '█'
+        
+        if caps_next and ch.isalpha():
+            ch = ch.upper()
+            caps_next = False
+        
+        result.append(ch)
+        state = next_state(state, target)
+    
+    return ''.join(result)
+`;
+            await pyodide.runPythonAsync(pythonCode);
+            encodeFunc = pyodide.globals.get('encode');
+            decodeFunc = pyodide.globals.get('decode');
+
+            loadingDiv.innerText = '✅ Ready';
+            loadingDiv.style.color = '#00ff9d';
+            setTimeout(() => {
+                loadingDiv.style.display = 'none';
+            }, 1500);
+
+            document.getElementById('encodeBtn').disabled = false;
+            document.getElementById('decodeBtn').disabled = false;
+            document.getElementById('copyBtn').disabled = false;
+            pyodideReady = true;
+        } catch (err) {
+            console.error(err);
+            loadingDiv.innerText = '❌ Failed to load: ' + err.message;
+            loadingDiv.style.color = '#ff6b6b';
+        }
+    }
+
+    const script = document.createElement('script');
+    script.src = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js";
+    script.onload = () => {
+        loadPyodideAndCode();
+    };
+    document.head.appendChild(script);
+
+    document.getElementById('encodeBtn').addEventListener('click', () => {
+        if (!pyodideReady) return;
+        const input = document.getElementById('inputText').value;
+        if (!input.trim()) {
+            showStatus('⚠️ Enter text to encode', 'error');
+            return;
+        }
+        try {
+            const encoded = encodeFunc(input);
+            document.getElementById('outputText').value = encoded;
+            showStatus('✅ Encoded', 'success');
+        } catch(e) {
+            showStatus('❌ Error: ' + e, 'error');
+        }
+    });
+
+    document.getElementById('decodeBtn').addEventListener('click', () => {
+        if (!pyodideReady) return;
+        const input = document.getElementById('inputText').value;
+        if (!input.trim()) {
+            showStatus('⚠️ Enter WeirdText to decode', 'error');
+            return;
+        }
+        try {
+            const decoded = decodeFunc(input);
+            document.getElementById('outputText').value = decoded;
+            showStatus('✅ Decoded', 'success');
+        } catch(e) {
+            showStatus('❌ Error: ' + e, 'error');
+        }
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        document.getElementById('inputText').value = '';
+        document.getElementById('outputText').value = '';
+        showStatus('🧹 Cleared', 'success');
+    });
+
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+        const output = document.getElementById('outputText').value;
+        if (!output) {
+            showStatus('⚠️ Nothing to copy', 'error');
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(output);
+                showStatus('📋 Copied!', 'success');
+                return;
+            } catch (err) {}
+        }
+        try {
+            const textarea = document.getElementById('outputText');
+            textarea.select();
+            document.execCommand('copy');
+            showStatus('📋 Copied!', 'success');
+        } catch (err) {
+            showStatus('❌ Copy failed', 'error');
+        }
+    });
+
+    function showStatus(msg, type) {
+        const statusDiv = document.getElementById('status');
+        statusDiv.textContent = msg;
+        statusDiv.className = 'status ' + type;
+        setTimeout(() => {
+            if (statusDiv.className === 'status ' + type) {
+                statusDiv.textContent = '';
+                statusDiv.className = 'status';
+            }
+        }, 3000);
+    }
+</script>
+</body>
+</html>
