@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeirdText Cipher - 32 Symbols, Full Punctuation</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 1000px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        h1 {
+            color: #00ff9d;
+            text-align: center;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 20px;
+        }
+        .symbol-display {
+            background: #0a0a0f;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            white-space: nowrap;
+            font-size: 20px;
+            letter-spacing: 4px;
+            color: #ffcc00;
+            font-family: monospace;
+        }
+        textarea {
+            width: 100%;
+            padding: 15px;
+            background: #0a0a0f;
+            border: 1px solid #333;
+            border-radius: 12px;
+            color: #00ff9d;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #00ff9d;
+        }
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #00ff9d, #00cc7a);
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 14px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button.secondary {
+            background: linear-gradient(135deg, #ff6b6b, #cc5555);
+        }
+        button.tertiary {
+            background: linear-gradient(135deg, #6b48ff, #4a30cc);
+        }
+        button.copy-btn {
+            background: linear-gradient(135deg, #ffcc00, #ff9900);
+            color: #0a0a0a;
+        }
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .status.success {
+            background: rgba(0,255,157,0.1);
+            color: #00ff9d;
+        }
+        .status.error {
+            background: rgba(255,107,107,0.1);
+            color: #ff6b6b;
+        }
+        .legend {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            font-size: 12px;
+            color: #888;
+            line-height: 1.5;
+            text-align: center;
+        }
+        hr {
+            border-color: #333;
+            margin: 20px 0;
+        }
+        #loading {
+            text-align: center;
+            color: #ffcc00;
+            margin-bottom: 15px;
+        }
+        .symbol-label {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔮 WEIRDTEXT CIPHER 🔮</h1>
+    <div class="subtitle">encode &amp; decode messages using 32 unusual symbols</div>
+
+    <div id="loading">⏳ Loading cipher engine...</div>
+
+    <div class="symbol-label">📜 SYMBOL SET</div>
+    <div class="symbol-display" id="symbolDisplay"></div>
+
+    <textarea id="inputText" rows="4" placeholder="Enter text to encode or decode..."></textarea>
+
+    <div class="button-group">
+        <button id="encodeBtn" disabled>✨ ENCODE</button>
+        <button id="decodeBtn" disabled class="secondary">🔓 DECODE</button>
+        <button id="clearBtn" class="tertiary">🗑️ CLEAR</button>
+    </div>
+
+    <div class="symbol-label">🔐 RESULT</div>
+    <textarea id="outputText" rows="6" readonly placeholder="Result will appear here..."></textarea>
+    
+    <div class="button-group">
+        <button id="copyBtn" class="copy-btn" disabled>📋 COPY TO CLIPBOARD</button>
+    </div>
+    
+    <div id="status" class="status"></div>
+    <hr>
+    <div class="legend">
+        An unusual encoding method that transforms text into a sequence of 32 rare symbols.<br>
+        Each encoded character depends on the previous state, making patterns difficult to detect.<br>
+        Supports letters, numbers, punctuation, and spaces.
+    </div>
+</div>
+
+<script>
+    // 32 symbols – exactly the requested set
+    const SYMBOLS = [
+        '§', '÷', '¦', 'æ', '¶', 'ö', 'Æ', 'δ', '╪', '\u0096',
+        '℟', '℔', 'ꜷ', 'â', 'ç', 'ʤ', 'Ω', 'φ', '∞',
+        '∆', '∑', 'π', 'µ', 'ß', 'ж', '‡',
+        '▀', '▄', '█', '⊬', '⋉', '⊑'
+    ];
+    document.getElementById('symbolDisplay').innerHTML = SYMBOLS.map(s => `<span style="margin:0 4px">${s}</span>`).join('');
+
+    let pyodideReady = false;
+    let encodeFunc, decodeFunc;
+
+    async function loadPyodideAndCode() {
+        const loadingDiv = document.getElementById('loading');
+        try {
+            let pyodide = await loadPyodide();
+            loadingDiv.innerText = '📦 Initializing...';
+
+            const pythonCode = `
+# ========== 32 regular symbols ==========
+SYMBOLS = [
+    '§', '÷', '¦', 'æ', '¶', 'ö', 'Æ', 'δ', '╪', '\u0096',
+    '℟', '℔', 'ꜷ', 'â', 'ç', 'ʤ', 'Ω', 'φ', '∞',
+    '∆', '∑', 'π', 'µ', 'ß', 'ж', '‡',
+    '▀', '▄', '█', '⊬', '⋉', '⊑'
+]
+
+REGULAR_SYMBOLS = SYMBOLS          # 32 symbols, indices 0-31
+
+# Command codes (used as targets in normal mode only)
+CMD_CAPS = 30
+CMD_SHIFT = 31
+
+N = len(REGULAR_SYMBOLS)   # 32
+
+# Normal characters: a-z, space, period, comma, newline (30 items)
+NORMAL_TARGETS = list('abcdefghijklmnopqrstuvwxyz') + [' ', '.', ',', '\\n']
+
+# Shifted characters: extended with new additions
+SHIFTED_TARGETS = [
+    '0','1','2','3','4','5','6','7','8','9',
+    '!','?','%','@','#','$','&','*','(',')',
+    '-','_','+','=','^',
+    ':', '[', ']', "'",
+    '"', '{', '}', '|', '\\\\', '/', ';', '<', '>',
+    '~', '\`'          # 38: tilde, 39: backtick
+]
+
+# Dedicated unsupported marker – far above all real targets (max index 1023)
+UNSUPPORTED_TARGET = 255
+
+# Maps
+normal_to_idx = {ch: i for i, ch in enumerate(NORMAL_TARGETS)}  # 0-29
+idx_to_normal = {i: ch for i, ch in enumerate(NORMAL_TARGETS)}
+shifted_to_idx = {ch: i for i, ch in enumerate(SHIFTED_TARGETS)}  # 0-39
+idx_to_shifted = {i: ch for i, ch in enumerate(SHIFTED_TARGETS)}
+
+INITIAL_STATE = 123456789
+MASK = (1 << 64) - 1
+MULT = 1103515245
+INC = 12345
+
+def next_state(state, target):
+    return (state * MULT + target + INC) & MASK
+
+# --- Non-linear offset to break the multiple-of-32 alignment ---
+def offset(state):
+    h = state ^ 0x9E3779B97F4A7C15
+    h = (h ^ (h >> 30)) * 0xBF58476D1CE4E5B9
+    h = (h ^ (h >> 27)) * 0x94D049BB133111EB
+    h = h ^ (h >> 31)
+    return h % N
+
+def encode(plaintext):
+    if not plaintext:
+        return ''
+    result = []
+    state = INITIAL_STATE
+    
+    for ch in plaintext:
+        is_upper = ch.isupper() and ch.isalpha()
+        lower_ch = ch.lower()
+        
+        # Determine if the character needs shift mode and its target
+        if lower_ch in normal_to_idx:
+            target = normal_to_idx[lower_ch]
+            use_shift = False
+        elif ch in shifted_to_idx:
+            target = shifted_to_idx[ch]
+            use_shift = True
+        else:
+            # Unsupported character
+            use_shift = True
+            target = UNSUPPORTED_TARGET   # 255 – safe, far beyond any real shifted char
+            is_upper = False
+        
+        # Caps command before the letter
+        if is_upper:
+            off = offset(state)
+            out_idx = (off + CMD_CAPS) % N
+            result.append(REGULAR_SYMBOLS[out_idx])
+            state = next_state(state, CMD_CAPS)
+        
+        if use_shift:
+            # Emit shift command
+            off = offset(state)
+            out_idx = (off + CMD_SHIFT) % N
+            result.append(REGULAR_SYMBOLS[out_idx])
+            state = next_state(state, CMD_SHIFT)
+            
+            # Encode the shifted target as two base-N digits
+            high = target // N          # for 255: 7
+            low = target % N            # for 255: 31
+            
+            off = offset(state)
+            out_high = (off + high) % N
+            result.append(REGULAR_SYMBOLS[out_high])
+            state = next_state(state, high)
+            
+            off = offset(state)
+            out_low = (off + low) % N
+            result.append(REGULAR_SYMBOLS[out_low])
+            state = next_state(state, low)
+        else:
+            # Normal character (0-29)
+            off = offset(state)
+            out_idx = (off + target) % N
+            result.append(REGULAR_SYMBOLS[out_idx])
+            state = next_state(state, target)
+    
+    return ''.join(result)
+
+def decode(weird_text):
+    if not weird_text:
+        return ''
+    result = []
+    state = INITIAL_STATE
+    caps_next = False
+    
+    sym_to_idx = {sym: i for i, sym in enumerate(REGULAR_SYMBOLS)}
+    
+    i = 0
+    text_len = len(weird_text)
+    while i < text_len:
+        sym = weird_text[i]
+        if sym not in sym_to_idx:
+            result.append('█')
+            state = next_state(state, 0)   # keep state moving forward with dummy target
+            i += 1
+            continue
+        
+        idx = sym_to_idx[sym]
+        off = offset(state)
+        target = (idx - off) % N
+        
+        if target < 30:                     # Normal character (0-29)
+            ch = idx_to_normal[target]
+            if caps_next and ch.isalpha():
+                ch = ch.upper()
+                caps_next = False
+            result.append(ch)
+            state = next_state(state, target)
+            i += 1
+        elif target == CMD_CAPS:            # Caps command
+            caps_next = True
+            state = next_state(state, target)
+            i += 1
+        elif target == CMD_SHIFT:           # Shift command – read next two symbols
+            state = next_state(state, target)
+            i += 1
+            if i + 1 >= text_len:           # Not enough symbols left -> garbage
+                result.append('█')
+                break
+            # First digit (high)
+            sym_high = weird_text[i]
+            if sym_high not in sym_to_idx:
+                result.append('█')
+                state = next_state(state, 0)
+                i += 1
+                continue
+            high_idx = sym_to_idx[sym_high]
+            off = offset(state)
+            high = (high_idx - off) % N
+            state = next_state(state, high)
+            i += 1
+            # Second digit (low)
+            sym_low = weird_text[i]
+            if sym_low not in sym_to_idx:
+                result.append('█')
+                state = next_state(state, 0)
+                i += 1
+                continue
+            low_idx = sym_to_idx[sym_low]
+            off = offset(state)
+            low = (low_idx - off) % N
+            state = next_state(state, low)
+            i += 1
+            full_target = high * N + low
+            # Check for unsupported marker first
+            if full_target == UNSUPPORTED_TARGET:
+                result.append('█')
+            elif full_target < len(SHIFTED_TARGETS):
+                ch = idx_to_shifted[full_target]
+                if caps_next and ch.isalpha():
+                    ch = ch.upper()
+                    caps_next = False
+                result.append(ch)
+            else:
+                result.append('█')
+        else:                               # target >= 32 (should not happen in normal mode)
+            result.append('█')
+            state = next_state(state, target)
+            i += 1
+    
+    return ''.join(result)
+`;
+            await pyodide.runPythonAsync(pythonCode);
+            encodeFunc = pyodide.globals.get('encode');
+            decodeFunc = pyodide.globals.get('decode');
+
+            loadingDiv.innerText = '✅ Ready';
+            loadingDiv.style.color = '#00ff9d';
+            setTimeout(() => {
+                loadingDiv.style.display = 'none';
+            }, 1500);
+
+            document.getElementById('encodeBtn').disabled = false;
+            document.getElementById('decodeBtn').disabled = false;
+            document.getElementById('copyBtn').disabled = false;
+            pyodideReady = true;
+        } catch (err) {
+            console.error(err);
+            loadingDiv.innerText = '❌ Failed to load: ' + err.message;
+            loadingDiv.style.color = '#ff6b6b';
+        }
+    }
+
+    // Load Pyodide only once
+    if (typeof loadPyodide !== 'undefined') {
+        loadPyodideAndCode();
+    } else {
+        document.getElementById('loading').innerText = '❌ Pyodide not available';
+    }
+
+    document.getElementById('encodeBtn').addEventListener('click', () => {
+        if (!pyodideReady) return;
+        const input = document.getElementById('inputText').value;
+        if (!input.trim()) {
+            showStatus('⚠️ Enter text to encode', 'error');
+            return;
+        }
+        try {
+            const encoded = encodeFunc(input);
+            document.getElementById('outputText').value = encoded;
+            showStatus('✅ Encoded', 'success');
+        } catch(e) {
+            showStatus('❌ Error: ' + e, 'error');
+        }
+    });
+
+    document.getElementById('decodeBtn').addEventListener('click', () => {
+        if (!pyodideReady) return;
+        const input = document.getElementById('inputText').value;
+        if (!input.trim()) {
+            showStatus('⚠️ Enter WeirdText to decode', 'error');
+            return;
+        }
+        try {
+            const decoded = decodeFunc(input);
+            document.getElementById('outputText').value = decoded;
+            showStatus('✅ Decoded', 'success');
+        } catch(e) {
+            showStatus('❌ Error: ' + e, 'error');
+        }
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        document.getElementById('inputText').value = '';
+        document.getElementById('outputText').value = '';
+        showStatus('🧹 Cleared', 'success');
+    });
+
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+        const output = document.getElementById('outputText').value;
+        if (!output) {
+            showStatus('⚠️ Nothing to copy', 'error');
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(output);
+                showStatus('📋 Copied!', 'success');
+                return;
+            } catch (err) {}
+        }
+        try {
+            const textarea = document.getElementById('outputText');
+            textarea.select();
+            document.execCommand('copy');
+            showStatus('📋 Copied!', 'success');
+        } catch (err) {
+            showStatus('❌ Copy failed', 'error');
+        }
+    });
+
+    function showStatus(msg, type) {
+        const statusDiv = document.getElementById('status');
+        statusDiv.textContent = msg;
+        statusDiv.className = 'status ' + type;
+        setTimeout(() => {
+            if (statusDiv.className === 'status ' + type) {
+                statusDiv.textContent = '';
+                statusDiv.className = 'status';
+            }
+        }, 3000);
+    }
+</script>
+</body>
+</html>
